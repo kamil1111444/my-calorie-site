@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>КБЖУ Калькулятор</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,sans-serif;background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;padding:20px;display:flex;justify-content:center;align-items:flex-start}
+.app{background:#fff;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:30px;max-width:750px;width:100%}
+h1{text-align:center;color:#333;margin-bottom:5px;font-size:1.6rem}
+.sub{text-align:center;color:#888;font-size:.85rem;margin-bottom:20px}
+.row{display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap}
+.row>*{flex:1;min-width:100px}
+label{display:block;font-weight:600;font-size:.8rem;color:#555;margin-bottom:4px}
+input,select{width:100%;padding:10px 12px;border:2px solid #e0e0e0;border-radius:10px;font-size:.95rem;font-family:inherit}
+input:focus,select:focus{outline:none;border-color:#764ba2}
+.search-box{position:relative}
+.search-results{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ddd;border-radius:10px;max-height:220px;overflow-y:auto;z-index:100;display:none;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.search-results.show{display:block}
+.search-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:.9rem}
+.search-item:hover{background:#f7f7fa}
+.search-item .kcal{color:#888;font-size:.8rem}
+button{padding:10px 18px;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-family:inherit;font-size:.9rem;transition:transform .15s}
+button:hover{transform:scale(1.02)}
+.btn-calc{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;width:100%;padding:14px;font-size:1rem;margin-top:10px}
+.btn-clear{background:#eee;color:#666;width:100%;margin-top:8px}
+.ingredients{margin:15px 0}
+.ingredient-item{display:flex;justify-content:space-between;align-items:center;background:#f7f7fa;padding:10px 14px;border-radius:10px;margin-bottom:6px;font-size:.9rem}
+.ingredient-item .remove{color:#e74c3c;cursor:pointer;font-weight:bold;padding:0 5px}
+.result{margin-top:20px;background:#f7f7fa;border-radius:16px;padding:20px;display:none}
+.result.show{display:block;animation:fadeIn .4s}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.macro-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center}
+.macro{background:#fff;padding:10px;border-radius:10px}
+.macro .val{font-size:1.3rem;font-weight:800;color:#764ba2}
+.macro .lbl{font-size:.7rem;color:#888;margin-top:2px}
+.cal-highlight{grid-column:span 4;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+.cal-highlight .val{color:#fff;font-size:1.8rem}
+.cal-highlight .lbl{color:rgba(255,255,255,.85)}
+.mineral-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px;text-align:center}
+.mineral{background:#fff;padding:10px;border-radius:10px;border-left:4px solid #764ba2}
+.mineral .val{font-size:1.2rem;font-weight:800;color:#333}
+.mineral .lbl{font-size:.7rem;color:#888}
+.vitamins{margin-top:15px;font-size:.85rem;color:#555;line-height:1.6}
+.vitamins .tag{display:inline-block;background:#e8e0f0;padding:2px 8px;border-radius:6px;margin:2px;font-size:.8rem}
+.recommendation{margin-top:15px;padding:12px;background:#fff3cd;border-radius:10px;font-size:.85rem;color:#856404}
+.note{font-size:.7rem;color:#aaa;text-align:center;margin-top:15px}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>🍎 КБЖУ Калькулятор</h1>
+<p class="sub">Поиск · Ингредиенты · Витамины · Zn, Mg, Fe</p>
+<div class="row">
+<div><label>Возраст</label><input type="number" id="age" value="15" min="5" max="99"></div>
+<div><label>Вес (кг)</label><input type="number" id="weight" value="55" min="20" max="200"></div>
+<div><label>Пол</label><select id="gender"><option value="male">Мужской</option><option value="female">Женский</option></select></div>
+</div>
+<label>Добавить продукт</label>
+<div class="search-box">
+<input type="text" id="searchInput" placeholder="Начни вводить: рис, курица, котлета..." autocomplete="off">
+<div class="search-results" id="searchResults"></div>
+</div>
+<div class="ingredients" id="ingredientsList"><p style="color:#aaa;font-size:.85rem;text-align:center;padding:15px;">Пока пусто.</p></div>
+<button class="btn-calc" onclick="calculate()">Рассчитать</button>
+<button class="btn-clear" onclick="clearAll()">Очистить</button>
+<div class="result" id="result">
+<div class="macro-grid" id="macroGrid"></div>
+<div class="mineral-grid" id="mineralGrid"></div>
+<div class="vitamins" id="vitaminsBlock"></div>
+<div class="recommendation" id="recommendationBlock"></div>
+</div>
+<p class="note">⚠️ Данные приблизительные. Не заменяет консультацию врача.</p>
+</div>
+<script>
+const DB={
+rice_cooked:{name:'Рис варёный',kcal:130,p:2.7,f:0.3,c:28,vitam:{B1:.09,B2:0,C:0,A:0},zn:.4,mg:10,fe:.2},
+rice_white:{name:'Рис белый сухой',kcal:344,p:6.7,f:.7,c:78.9,vitam:{B1:.08,B2:.04,C:0,A:0},zn:1.1,mg:25,fe:.8},
+rice_brown:{name:'Рис бурый',kcal:337,p:7.9,f:2.7,c:72.2,vitam:{B1:.4,B2:.05,C:0,A:0},zn:2,mg:143,fe:1.5},
+buckwheat:{name:'Гречка варёная',kcal:110,p:4,f:1.2,c:20,vitam:{B1:.21,B2:0,C:0,A:0},zn:.8,mg:51,fe:.9},
+buckwheat_dry:{name:'Гречка сухая',kcal:313,p:12.6,f:3.3,c:62.1,vitam:{B1:.2,B2:0,C:0,A:0},zn:2,mg:200,fe:6.7},
+oatmeal:{name:'Овсянка варёная',kcal:88,p:3,f:1.7,c:15,vitam:{B1:.1,B2:.02,C:0,A:0},zn:.6,mg:30,fe:.9},
+oatmeal_dry:{name:'Овсянка сухая',kcal:389,p:16.9,f:6.9,c:66.3,vitam:{B1:.76,B2:.15,C:0,A:0},zn:4,mg:177,fe:4.7},
+pasta:{name:'Макароны варёные',kcal:131,p:5,f:1.1,c:25,vitam:{B1:.1,B2:.05,C:0,A:0},zn:.5,mg:15,fe:.5},
+pasta_dry:{name:'Макароны сухие',kcal:371,p:13,f:1.5,c:71,vitam:{B1:.2,B2:.1,C:0,A:0},zn:1.3,mg:40,fe:1.5},
+potato:{name:'Картофель варёный',kcal:82,p:2,f:.4,c:17,vitam:{B1:.07,B2:.04,C:10,A:.02},zn:.3,mg:16,fe:.3},
+potato_fried:{name:'Картофель жареный',kcal:312,p:3.8,f:17,c:37,vitam:{B1:.1,B2:.04,C:10,A:0},zn:.5,mg:25,fe:.6},
+potato_mashed:{name:'Пюре картофельное',kcal:113,p:2,f:4.2,c:17,vitam:{B1:.06,B2:.04,C:8,A:.02},zn:.3,mg:15,fe:.3},
+bread_white:{name:'Хлеб белый',kcal:265,p:8,f:3.2,c:49,vitam:{B1:.03,B2:.05,C:0,A:0},zn:.9,mg:24,fe:1.6},
+bread_rye:{name:'Хлеб ржаной',kcal:210,p:6.5,f:1.2,c:42,vitam:{B1:.15,B2:.07,C:0,A:0},zn:1.2,mg:55,fe:3.1},
+bread_black:{name:'Хлеб чёрный',kcal:220,p:7,f:1.5,c:44,vitam:{B1:.14,B2:.07,C:0,A:0},zn:1.3,mg:50,fe:2.8},
+lavash:{name:'Лаваш тонкий',kcal:275,p:9,f:1.2,c:56,vitam:{B1:.1,B2:.05,C:0,A:0},zn:.8,mg:25,fe:1.5},
+couscous:{name:'Кускус варёный',kcal:112,p:3.8,f:.2,c:23,vitam:{B1:.06,B2:.02,C:0,A:0},zn:.5,mg:10,fe:.4},
+bulgur:{name:'Булгур варёный',kcal:83,p:3,f:.2,c:19,vitam:{B1:.06,B2:.02,C:0,A:0},zn:.6,mg:20,fe:.6},
+quinoa:{name:'Киноа варёная',kcal:120,p:4.4,f:1.9,c:21,vitam:{B1:.1,B2:.1,C:0,A:0},zn:1.1,mg:64,fe:1.5},
+pearl_barley:{name:'Перловка варёная',kcal:123,p:2.3,f:.4,c:28,vitam:{B1:.08,B2:.02,C:0,A:0},zn:.6,mg:15,fe:.6},
+semolina:{name:'Манка варёная',kcal:80,p:2.5,f:.3,c:17,vitam:{B1:.03,B2:.01,C:0,A:0},zn:.3,mg:5,fe:.3},
+corn_canned:{name:'Кукуруза консерв.',kcal:86,p:3.3,f:1.2,c:18,vitam:{B1:.05,B2:.05,C:5,A:0},zn:.5,mg:20,fe:.5},
+peas_green:{name:'Горошек зелёный',kcal:81,p:5.4,f:.4,c:14,vitam:{B1:.3,B2:.1,C:40,A:5},zn:1,mg:33,fe:1.5},
+beans_canned:{name:'Фасоль консерв.',kcal:91,p:6,f:.5,c:16,vitam:{B1:.1,B2:.05,C:0,A:0},zn:.8,mg:30,fe:1.5},
+lentils:{name:'Чечевица варёная',kcal:116,p:9,f:.4,c:20,vitam:{B1:.17,B2:.07,C:1.5,A:0},zn:1.3,mg:36,fe:3.3},
+chicken_breast:{name:'Куриная грудка варёная',kcal:165,p:26,f:3.6,c:0,vitam:{B1:.05,B2:.12,C:.72,A:43.2},zn:1.8,mg:28,fe:1},
+chicken_leg:{name:'Куриная ножка варёная',kcal:170,p:22,f:7,c:0,vitam:{B1:.06,B2:.15,C:0,A:20},zn:2,mg:22,fe:1.3},
+chicken_wing:{name:'Куриное крыло',kcal:203,p:17,f:14,c:0,vitam:{B1:.05,B2:.12,C:0,A:20},zn:1.5,mg:18,fe:1},
+chicken_fillet:{name:'Куриное филе жареное',kcal:220,p:24,f:11,c:0,vitam:{B1:.05,B2:.1,C:0,A:15},zn:1.5,mg:25,fe:1},
+chicken_liver:{name:'Печень куриная',kcal:140,p:19,f:6,c:1,vitam:{B1:.2,B2:2.1,C:20,A:3300},zn:3,mg:25,fe:9},
+chicken_heart:{name:'Сердце куриное',kcal:153,p:15,f:10,c:0,vitam:{B1:.1,B2:.8,C:0,A:20},zn:2,mg:20,fe:5},
+turkey:{name:'Индейка варёная',kcal:189,p:25,f:7,c:0,vitam:{B1:.05,B2:.1,C:0,A:10},zn:2.5,mg:25,fe:1.5},
+beef:{name:'Говядина варёная',kcal:250,p:25,f:16,c:0,vitam:{B1:.04,B2:.12,C:0,A:0},zn:5,mg:22,fe:2.7},
+beef_lean:{name:'Говядина нежирная',kcal:187,p:24,f:9,c:0,vitam:{B1:.04,B2:.1,C:0,A:0},zn:4.5,mg:20,fe:2.5},
+beef_liver:{name:'Печень говяжья',kcal:135,p:18,f:4,c:4,vitam:{B1:.2,B2:2.5,C:20,A:5000},zn:4,mg:20,fe:6.9},
+beef_heart:{name:'Сердце говяжье',kcal:112,p:15,f:4,c:2,vitam:{B1:.3,B2:.8,C:0,A:20},zn:3,mg:20,fe:4.5},
+beef_tongue:{name:'Язык говяжий',kcal:224,p:15,f:17,c:0,vitam:{B1:.05,B2:.3,C:0,A:0},zn:3,mg:20,fe:2.5},
+pork:{name:'Свинина варёная',kcal:280,p:20,f:21,c:0,vitam:{B1:.45,B2:.13,C:0,A:0},zn:2.5,mg:24,fe:1.3},
+pork_lean:{name:'Свинина нежирная',kcal:190,p:22,f:10,c:0,vitam:{B1:.5,B2:.12,C:0,A:0},zn:2.2,mg:22,fe:1.2},
+pork_liver:{name:'Печень свиная',kcal:130,p:18,f:4,c:3,vitam:{B1:.3,B2:2.2,C:15,A:3500},zn:3.5,mg:20,fe:12},
+lamb:{name:'Баранина варёная',kcal:291,p:23,f:21,c:0,vitam:{B1:.05,B2:.15,C:0,A:0},zn:4,mg:25,fe:2.5},
+rabbit:{name:'Кролик варёный',kcal:173,p:24,f:8,c:0,vitam:{B1:.1,B2:.15,C:0,A:0},zn:2,mg:25,fe:1.5},
+cutlet_chicken:{name:'Котлета куриная',kcal:220,p:15,f:12,c:12,vitam:{B1:.05,B2:.1,C:0,A:10},zn:1.2,mg:18,fe:.8},
+cutlet_pork:{name:'Котлета свиная',kcal:280,p:13,f:22,c:8,vitam:{B1:.3,B2:.1,C:0,A:0},zn:1.8,mg:20,fe:1},
+cutlet_beef:{name:'Котлета говяжья',kcal:260,p:16,f:19,c:7,vitam:{B1:.04,B2:.1,C:0,A:0},zn:3.2,mg:18,fe:1.8},
+cutlet_veg:{name:'Котлета овощная',kcal:180,p:4,f:10,c:18,vitam:{B1:.05,B2:.05,C:5,A:20},zn:.5,mg:15,fe:1},
+sausage_boiled:{name:'Колбаса варёная',kcal:257,p:11,f:22,c:2,vitam:{B1:.2,B2:.1,C:0,A:0},zn:1.5,mg:15,fe:1.2},
+sausage_smoked:{name:'Колбаса копчёная',kcal:350,p:15,f:30,c:2,vitam:{B1:.25,B2:.12,C:0,A:0},zn:2,mg:18,fe:1.5},
+sosiska:{name:'Сосиска',kcal:260,p:10,f:23,c:3,vitam:{B1:.15,B2:.08,C:0,A:0},zn:1.2,mg:12,fe:1},
+ham:{name:'Ветчина',kcal:145,p:18,f:6,c:1,vitam:{B1:.3,B2:.1,C:0,A:0},zn:2,mg:18,fe:1},
+bacon:{name:'Бекон',kcal:541,p:35,f:42,c:1,vitam:{B1:.3,B2:.1,C:0,A:0},zn:2.5,mg:20,fe:1.5},
+pate:{name:'Паштет мясной',kcal:280,p:11,f:24,c:3,vitam:{B1:.1,B2:.5,C:0,A:800},zn:2,mg:15,fe:3},
+shashlik_pork:{name:'Шашлык свиной',kcal:320,p:20,f:25,c:2,vitam:{B1:.4,B2:.12,C:0,A:0},zn:2.5,mg:22,fe:1.5},
+shashlik_chicken:{name:'Шашлык куриный',kcal:200,p:23,f:10,c:1,vitam:{B1:.05,B2:.12,C:0,A:15},zn:2,mg:25,fe:1},
+nuggets:{name:'Наггетсы',kcal:296,p:14,f:18,c:20,vitam:{B1:.1,B2:.08,C:0,A:5},zn:1,mg:20,fe:1},
+doner:{name:'Донер куриный',kcal:250,p:14,f:15,c:15,vitam:{B1:.05,B2:.1,C:2,A:10},zn:1.5,mg:20,fe:1.2},
+shawarma:{name:'Шаурма куриная',kcal:230,p:13,f:12,c:18,vitam:{B1:.05,B2:.1,C:3,A:10},zn:1.3,mg:18,fe:1.1},
+fish_cod:{name:'Треска варёная',kcal:78,p:16,f:.7,c:0,vitam:{B1:.06,B2:.09,C:0,A:6},zn:.6,mg:25,fe:.5},
+fish_salmon:{name:'Лосось',kcal:208,p:19,f:13,c:0,vitam:{B1:.2,B2:.2,C:0,A:40},zn:.6,mg:30,fe:.8},
+fish_tuna:{name:'Тунец',kcal:132,p:26,f:1,c:0,vitam:{B1:.03,B2:.1,C:0,A:10},zn:.7,mg:30,fe:1},
+fish_herring:{name:'Сельдь',kcal:248,p:17,f:19,c:0,vitam:{B1:.05,B2:.3,C:0,A:30},zn:1,mg:35,fe:1},
+fish_mackerel:{name:'Скумбрия',kcal:262,p:18,f:20,c:0,vitam:{B1:.2,B2:.3,C:0,A:30},zn:1,mg:30,fe:1},
+fish_pollock:{name:'Минтай',kcal:72,p:15,f:.9,c:0,vitam:{B1:.05,B2:.1,C:0,A:5},zn:.5,mg:25,fe:.5},
+fish_pink:{name:'Горбуша',kcal:142,p:19,f:6,c:0,vitam:{B1:.1,B2:.15,C:0,A:20},zn:.7,mg:30,fe:.7},
+fish_perch:{name:'Окунь морской',kcal:103,p:17,f:3,c:0,vitam:{B1:.05,B2:.1,C:0,A:10},zn:.6,mg:25,fe:.6},
+fish_carp:{name:'Карп',kcal:112,p:15,f:5,c:0,vitam:{B1:.1,B2:.1,C:0,A:15},zn:.7,mg:25,fe:.7},
+fish_halibut:{name:'Палтус',kcal:186,p:18,f:12,c:0,vitam:{B1:.05,B2:.1,C:0,A:15},zn:.6,mg:25,fe:.6},
+squid:{name:'Кальмар',kcal:92,p:14,f:1.4,c:3,vitam:{B1:.05,B2:.1,C:0,A:5},zn:1.5,mg:40,fe:.7},
+shrimp:{name:'Креветки',kcal:99,p:22,f:.3,c:0,vitam:{B1:.03,B2:.05,C:0,A:5},zn:1.5,mg:35,fe:.5},
+crab:{name:'Краб',kcal:97,p:16,f:1.5,c:0,vitam:{B1:.05,B2:.1,C:0,A:5},zn:3,mg:35,fe:.5},
+mussels:{name:'Мидии',kcal:86,p:11,f:2,c:3,vitam:{B1:.1,B2:.2,C:0,A:10},zn:1.5,mg:35,fe:3},
+oysters:{name:'Устрицы',kcal:81,p:8,f:2,c:4,vitam:{B1:.1,B2:.2,C:0,A:10},zn:16,mg:30,fe:5},
+fish_sticks:{name:'Рыбные палочки',kcal:250,p:11,f:14,c:20,vitam:{B1:.05,B2:.08,C:0,A:5},zn:.5,mg:20,fe:.5},
+caviar_red:{name:'Икра красная',kcal:250,p:30,f:13,c:0,vitam:{B1:.2,B2:.4,C:0,A:100},zn:1,mg:30,fe:1.5},
+caviar_black:{name:'Икра чёрная',kcal:235,p:26,f:13,c:0,vitam:{B1:.2,B2:.4,C:0,A:100},zn:1,mg:30,fe:1.5},
+fish_smoked:{name:'Рыба копчёная',kcal:180,p:20,f:10,c:0,vitam:{B1:.1,B2:.15,C:0,A:15},zn:.8,mg:30,fe:.8},
+seaweed:{name:'Морская капуста',kcal:25,p:1,f:.2,c:3,vitam:{B1:.05,B2:.1,C:5,A:10},zn:.5,mg:30,fe:1},
+tomato:{name:'Помидор',kcal:18,p:.9,f:.2,c:3.9,vitam:{B1:.06,B2:.04,C:13,A:42},zn:.2,mg:11,fe:.3},
+cucumber:{name:'Огурец',kcal:15,p:.7,f:.1,c:3.6,vitam:{B1:.02,B2:.02,C:2.8,A:5},zn:.1,mg:13,fe:.3},
+cabbage:{name:'Капуста белая',kcal:25,p:1.3,f:.1,c:5.8,vitam:{B1:.02,B2:.04,C:30,A:3},zn:.2,mg:12,fe:.5},
+cabbage_red:{name:'Капуста красная',kcal:26,p:1.4,f:.2,c:6,vitam:{B1:.05,B2:.05,C:50,A:5},zn:.2,mg:15,fe:.8},
+carrot:{name:'Морковь',kcal:41,p:.9,f:.2,c:9.6,vitam:{B1:.06,B2:.07,C:5.9,A:835},zn:.2,mg:12,fe:.3},
+beet:{name:'Свёкла',kcal:43,p:1.6,f:.2,c:9.6,vitam:{B1:.02,B2:.04,C:5,A:2},zn:.3,mg:20,fe:.8},
+onion:{name:'Лук',kcal:40,p:1.1,f:.1,c:9.3,vitam:{B1:.05,B2:.02,C:7,A:0},zn:.2,mg:10,fe:.2},
+garlic:{name:'Чеснок',kcal:149,p:6.4,f:.5,c:33,vitam:{B1:.2,B2:.1,C:31,A:0},zn:1.2,mg:25,fe:1.7},
+pepper_bell:{name:'Перец болгарский',kcal:27,p:1,f:.2,c:6,vitam:{B1:.05,B2:.04,C:128,A:26},zn:.2,mg:10,fe:.4},
+zucchini:{name:'Кабачок',kcal:17,p:1.2,f:.3,c:3.1,vitam:{B1:.03,B2:.03,C:17,A:5},zn:.3,mg:18,fe:.4},
+eggplant:{name:'Баклажан',kcal:25,p:1,f:.2,c:6,vitam:{B1:.04,B2:.05,C:5,A:2},zn:.2,mg:14,fe:.4},
+broccoli:{name:'Брокколи',kcal:34,p:2.8,f:.4,c:6.6,vitam:{B1:.07,B2:.12,C:89,A:31},zn:.4,mg:21,fe:.7},
+cauliflower:{name:'Цветная капуста',kcal:25,p:1.9,f:.3,c:5,vitam:{B1:.05,B2:.06,C:48,A:1},zn:.3,mg:15,fe:.4},
+spinach:{name:'Шпинат',kcal:23,p:2.9,f:.4,c:3.6,vitam:{B1:.08,B2:.19,C:28,A:469},zn:.5,mg:79,fe:2.7},
+lettuce:{name:'Салат листовой',kcal:15,p:1.4,f:.2,c:2.9,vitam:{B1:.05,B2:.08,C:9,A:370},zn:.2,mg:13,fe:.9},
+radish:{name:'Редис',kcal:16,p:.7,f:.1,c:3.4,vitam:{B1:.01,B2:.02,C:15,A:1},zn:.2,mg:10,fe:.3},
+pumpkin:{name:'Тыква',kcal:26,p:1,f:.1,c:6.5,vitam:{B1:.05,B2:.05,C:9,A:426},zn:.3,mg:12,fe:.8},
+mushroom:{name:'Шампиньоны',kcal:22,p:3.1,f:.3,c:3.3,vitam:{B1:.1,B2:.4,C:2,A:0},zn:.5,mg:9,fe:.5},
+green_peas:{name:'Горошек зелёный',kcal:81,p:5.4,f:.4,c:14,vitam:{B1:.3,B2:.1,C:40,A:5},zn:1,mg:33,fe:1.5},
+corn:{name:'Кукуруза',kcal:86,p:3.3,f:1.2,c:18,vitam:{B1:.05,B2:.05,C:5,A:0},zn:.5,mg:20,fe:.5},
+asparagus:{name:'Спаржа',kcal:20,p:2.2,f:.1,c:3.9,vitam:{B1:.1,B2:.1,C:20,A:38},zn:.5,mg:14,fe:.9},
+celery:{name:'Сельдерей',kcal:16,p:.7,f:.2,c:3,vitam:{B1:.02,B2:.03,C:8,A:9},zn:.1,mg:11,fe:.3},
+avocado:{name:'Авокадо',kcal:160,p:2,f:15,c:9,vitam:{B1:.07,B2:.13,C:10,A:7},zn:.6,mg:29,fe:.6},
+olives:{name:'Оливки',kcal:115,p:.8,f:11,c:6,vitam:{B1:.02,B2:0,C:0,A:20},zn:.2,mg:11,fe:.5},
+pickled_cucumber:{name:'Огурец солёный',kcal:13,p:.8,f:.1,c:2,vitam:{B1:.01,B2:.02,C:2,A:2},zn:.1,mg:8,fe:.2},
+sauerkraut:{name:'Капуста квашеная',kcal:23,p:1.8,f:.1,c:4,vitam:{B1:.03,B2:.04,C:20,A:2},zn:.3,mg:15,fe:.6},
+apple:{name:'Яблоко',kcal:52,p:.3,f:.2,c:14,vitam:{B1:.02,B2:.02,C:4.6,A:5},zn:.04,mg:5,fe:.2},
+banana:{name:'Банан',kcal:96,p:1.5,f:.2,c:21,vitam:{B1:.04,B2:.05,C:8.7,A:3},zn:.2,mg:30,fe:.3},
+orange:{name:'Апельсин',kcal:47,p:.9,f:.1,c:12,vitam:{B1:.04,B2:.03,C:53,A:8},zn:.07,mg:10,fe:.1},
+mandarin:{name:'Мандарин',kcal:53,p:.8,f:.3,c:13,vitam:{B1:.06,B2:.03,C:27,A:12},zn:.07,mg:12,fe:.2},
+pear:{name:'Груша',kcal:57,p:.4,f:.1,c:15,vitam:{B1:.02,B2:.02,C:4,A:2},zn:.1,mg:7,fe:.2},
+peach:{name:'Персик',kcal:39,p:.9,f:.3,c:10,vitam:{B1:.03,B2:.03,C:6.6,A:17},zn:.2,mg:9,fe:.3},
+apricot:{name:'Абрикос',kcal:48,p:1.4,f:.4,c:11,vitam:{B1:.03,B2:.04,C:10,A:96},zn:.2,mg:10,fe:.4},
+grape:{name:'Виноград',kcal:69,p:.7,f:.2,c:18,vitam:{B1:.05,B2:.02,C:3.2,A:3},zn:.1,mg:7,fe:.4},
+watermelon:{name:'Арбуз',kcal:30,p:.6,f:.2,c:7.6,vitam:{B1:.03,B2:.02,C:8,A:28},zn:.1,mg:10,fe:.2},
+melon:{name:'Дыня',kcal:34,p:.8,f:.2,c:8,vitam:{B1:.04,B2:.02,C:20,A:67},zn:.1,mg:12,fe:.2},
+strawberry:{name:'Клубника',kcal:32,p:.7,f:.3,c:7.7,vitam:{B1:.02,B2:.02,C:59,A:1},zn:.1,mg:13,fe:.4},
+raspberry:{name:'Малина',kcal:52,p:1.2,f:.7,c:12,vitam:{B1:.03,B2:.04,C:26,A:2},zn:.4,mg:22,fe:.7},
+blueberry:{name:'Черника',kcal:57,p:.7,f:.3,c:14,vitam:{B1:.04,B2:.04,C:10,A:3},zn:.2,mg:6,fe:.3},
+cherry:{name:'Вишня',kcal:50,p:1,f:.3,c:12,vitam:{B1:.03,B2:.03,C:10,A:3},zn:.1,mg:11,fe:.4},
+plum:{name:'Слива',kcal:46,p:.7,f:.3,c:11,vitam:{B1:.03,B2:.03,C:10,A:17},zn:.1,mg:7,fe:.2},
+kiwi:{name:'Киви',kcal:61,p:1.1,f:.5,c:15,vitam:{B1:.02,B2:.03,C:93,A:4},zn:.1,mg:17,fe:.3},
+pineapple:{name:'Ананас',kcal:50,p:.5,f:.1,c:13,vitam:{B1:.08,B2:.02,C:48,A:3},zn:.1,mg:12,fe:.3},
+pomegranate:{name:'Гранат',kcal:83,p:1.7,f:1.2,c:19,vitam:{B1:.07,B2:.05,C:10,A:0},zn:.3,mg:12,fe:.3},
+persimmon:{name:'Хурма',kcal:70,p:.6,f:.2,c:18,vitam:{B1:.02,B2:.02,C:66,A:81},zn:.1,mg:9,fe:.2},
+lemon:{name:'Лимон',kcal:29,p:1.1,f:.3,c:9,vitam:{B1:.04,B2:.02,C:53,A:2},zn:.1,mg:8,fe:.6},
+avocado_fruit:{name:'Авокадо',kcal:160,p:2,f:15,c:9,vitam:{B1:.07,B2:.13,C:10,A:7},zn:.6,mg:29,fe:.6},
+dried_apricot:{name:'Курага',kcal:241,p:3.4,f:.5,c:63,vitam:{B1:.02,B2:.02,C:4,A:580},zn:.4,mg:32,fe:2.7},
+raisins:{name:'Изюм',kcal:299,p:3.1,f:.5,c:79,vitam:{B1:.1,B2:.05,C:2,A:0},zn:.3,mg:32,fe:1.9},
+prunes:{name:'Чернослив',kcal:240,p:2.2,f:.4,c:64,vitam:{B1:.05,B2:.1,C:3,A:10},zn:.4,mg:41,fe:2.1},
+dates:{name:'Финики',kcal:282,p:2.5,f:.4,c:75,vitam:{B1:.05,B2:.07,C:0,A:0},zn:.4,mg:54,fe:1},
+milk:{name:'Молоко 2.5%',kcal:52,p:2.8,f:2.5,c:4.7,vitam:{B1:.04,B2:.15,C:.8,A:22},zn:.4,mg:10,fe:.1},
+milk_skim:{name:'Молоко 0.5%',kcal:35,p:3,f:.5,c:5,vitam:{B1:.04,B2:.15,C:.8,A:22},zn:.4,mg:10,fe:.1},
+kefir:{name:'Кефир 2.5%',kcal:50,p:2.8,f:2.5,c:4,vitam:{B1:.03,B2:.15,C:.2,A:15},zn:.4,mg:10,fe:.1},
+yogurt:{name:'Йогурт натуральный',kcal:60,p:4,f:3,c:4,vitam:{B1:.03,B2:.15,C:.5,A:15},zn:.5,mg:12,fe:.1},
+yogurt_fruit:{name:'Йогурт фруктовый',kcal:90,p:3,f:2.5,c:14,vitam:{B1:.03,B2:.12,C:2,A:10},zn:.4,mg:10,fe:.1},
+sour_cream:{name:'Сметана 20%',kcal:206,p:2.8,f:20,c:3,vitam:{B1:.03,B2:.1,C:.5,A:120},zn:.3,mg:8,fe:.1},
+cheese:{name:'Сыр твёрдый',kcal:360,p:24,f:29,c:0,vitam:{B1:.03,B2:.36,C:0,A:220},zn:3.1,mg:25,fe:.7},
+cheese_mozzarella:{name:'Моцарелла',kcal:280,p:22,f:20,c:2,vitam:{B1:.03,B2:.3,C:0,A:180},zn:2.5,mg:20,fe:.5},
+cheese_parmesan:{name:'Пармезан',kcal:392,p:35,f:26,c:3,vitam:{B1:.04,B2:.4,C:0,A:250},zn:3.5,mg:30,fe:.8},
+cheese_processed:{name:'Сыр плавленый',kcal:290,p:16,f:24,c:4,vitam:{B1:.03,B2:.2,C:0,A:150},zn:2,mg:18,fe:.5},
+cottage:{name:'Творог 5%',kcal:121,p:17,f:5,c:1.8,vitam:{B1:.04,B2:.3,C:.5,A:50},zn:.5,mg:20,fe:.4},
+cottage_0:{name:'Творог 0%',kcal:71,p:16,f:0,c:2,vitam:{B1:.04,B2:.3,C:.5,A:0},zn:.5,mg:20,fe:.4},
+curd:{name:'Творожная масса',kcal:340,p:10,f:20,c:30,vitam:{B1:.03,B2:.2,C:.5,A:80},zn:.5,mg:18,fe:.3},
+butter:{name:'Масло сливочное',kcal:717,p:.8,f:81,c:.1,vitam:{B1:0,B2:0,C:0,A:650},zn:.1,mg:2,fe:.1},
+ice_cream:{name:'Мороженое',kcal:207,p:3.5,f:11,c:24,vitam:{B1:.04,B2:.15,C:.5,A:80},zn:.5,mg:12,fe:.1},
+cream:{name:'Сливки 20%',kcal:205,p:2.5,f:20,c:3,vitam:{B1:.03,B2:.15,C:.5,A:150},zn:.3,mg:8,fe:.1},
+condensed_milk:{name:'Сгущёнка',kcal:321,p:7.2,f:8.5,c:56,vitam:{B1:.05,B2:.3,C:1,A:50},zn:.9,mg:25,fe:.2},
+peanuts:{name:'Арахис',kcal:567,p:26,f:49,c:16,vitam:{B1:.6,B2:.1,C:0,A:0},zn:3.3,mg:175,fe:2.5},
+walnuts:{name:'Грецкий орех',kcal:654,p:15,f:65,c:14,vitam:{B1:.4,B2:.1,C:1.3,A:8},zn:2.5,mg:158,fe:2.9},
+almonds:{name:'Миндаль',kcal:579,p:21,f:50,c:22,vitam:{B1:.2,B2:1,C:0,A:0},zn:3.1,mg:264,fe:3},
+hazelnuts:{name:'Фундук',kcal:628,p:15,f:61,c:17,vitam:{B1:.3,B2:.1,C:1.5,A:2},zn:2.4,mg:163,fe:4.7},
+cashews:{name:'Кешью',kcal:553,p:18,f:44,c:30,vitam:{B1:.4,B2:.2,C:.5,A:0},zn:5.8,mg:292,fe:6.7},
+pistachios:{name:'Фисташки',kcal:560,p:20,f:45,c:28,vitam:{B1:.5,B2:.2,C:3,A:13},zn:2.2,mg:121,fe:3.9},
+sunflower_seeds:{name:'Семечки подсолнуха',kcal:584,p:21,f:51,c:20,vitam:{B1:1.5,B2:.2,C:1.4,A:3},zn:5,mg:363,fe:5.3},
+pumpkin_seeds:{name:'Семечки тыквы',kcal:559,p:30,f:49,c:11,vitam:{B1:.3,B2:.2,C:2,A:5},zn:7.5,mg:550,fe:9},
+sesame:{name:'Кунжут',kcal:573,p:17,f:50,c:23,vitam:{B1:.8,B2:.2,C:0,A:2},zn:7.8,mg:350,fe:14.5},
+flax_seeds:{name:'Семена льна',kcal:534,p:18,f:42,c:29,vitam:{B1:1.6,B2:.2,C:.5,A:0},zn:4.3,mg:392,fe:5.7},
+chia:{name:'Семена чиа',kcal:486,p:17,f:31,c:42,vitam:{B1:.6,B2:.2,C:1.6,A:0},zn:4.6,mg:335,fe:7.7},
+lentils_dry:{name:'Чечевица сухая',kcal:352,p:24,f:1,c:60,vitam:{B1:.5,B2:.2,C:4,A:0},zn:3.3,mg:80,fe:7.5},
+peas_dry:{name:'Горох сухой',kcal:298,p:20,f:2,c:50,vitam:{B1:.7,B2:.2,C:0,A:0},zn:3,mg:80,fe:5},
+beans_dry:{name:'Фасоль сухая',kcal:298,p:21,f:2,c:47,vitam:{B1:.5,B2:.2,C:0,A:0},zn:3,mg:140,fe:6},
+chickpeas:{name:'Нут варёный',kcal:164,p:8.9,f:2.6,c:27,vitam:{B1:.1,B2:.05,C:1.3,A:0},zn:1.5,mg:48,fe:2.9},
+borscht:{name:'Борщ',kcal:49,p:1.5,f:2.5,c:5,vitam:{B1:.05,B2:.05,C:5,A:50},zn:.3,mg:10,fe:.5},
+soup_chicken:{name:'Суп куриный',kcal:40,p:3,f:2,c:2,vitam:{B1:.03,B2:.05,C:1,A:10},zn:.3,mg:8,fe:.3},
+soup_pea:{name:'Суп гороховый',kcal:66,p:4,f:2,c:9,vitam:{B1:.1,B2:.05,C:2,A:2},zn:.5,mg:15,fe:.7},
+soup_cabbage:{name:'Щи из свежей капусты',kcal:38,p:1.8,f:1.8,c:4,vitam:{B1:.04,B2:.04,C:10,A:30},zn:.3,mg:10,fe:.5},
+soup_mushroom:{name:'Суп грибной',kcal:45,p:2,f:2.5,c:4,vitam:{B1:.05,B2:.1,C:2,A:5},zn:.4,mg:10,fe:.5},
+soup_rassolnik:{name:'Рассольник',kcal:55,p:2.5,f:2.5,c:6,vitam:{B1:.05,B2:.05,C:4,A:20},zn:.4,mg:12,fe:.6},
+soup_solyanka:{name:'Солянка',kcal:75,p:4,f:5,c:4,vitam:{B1:.05,B2:.08,C:3,A:20},zn:.6,mg:15,fe:.8},
+soup_okroshka:{name:'Окрошка',kcal:60,p:3,f:3,c:5,vitam:{B1:.05,B2:.08,C:8,A:25},zn:.4,mg:15,fe:.6},
+pelmeni:{name:'Пельмени',kcal:250,p:11,f:12,c:25,vitam:{B1:.1,B2:.1,C:0,A:5},zn:1.2,mg:15,fe:1},
+vareniki:{name:'Вареники',kcal:200,p:6,f:8,c:26,vitam:{B1:.08,B2:.08,C:1,A:5},zn:.7,mg:12,fe:.7},
+plov:{name:'Плов',kcal:220,p:8,f:10,c:26,vitam:{B1:.1,B2:.05,C:2,A:5},zn:1,mg:20,fe:1},
+blini:{name:'Блины',kcal:230,p:6,f:10,c:28,vitam:{B1:.08,B2:.1,C:.5,A:20},zn:.7,mg:15,fe:.8},
+syrniki:{name:'Сырники',kcal:220,p:14,f:10,c:18,vitam:{B1:.05,B2:.2,C:.5,A:40},zn:.8,mg:18,fe:.6},
+omelette:{name:'Омлет',kcal:184,p:11,f:14,c:2,vitam:{B1:.05,B2:.2,C:0,A:120},zn:1,mg:12,fe:1.5},
+fried_eggs:{name:'Яичница',kcal:200,p:13,f:15,c:1,vitam:{B1:.05,B2:.2,C:0,A:130},zn:1.2,mg:12,fe:1.8},
+pizza:{name:'Пицца',kcal:266,p:11,f:10,c:33,vitam:{B1:.1,B2:.1,C:2,A:30},zn:1.2,mg:18,fe:1.2},
+burger:{name:'Бургер',kcal:295,p:13,f:15,c:28,vitam:{B1:.1,B2:.1,C:2,A:15},zn:1.5,mg:20,fe:1.5},
+fries:{name:'Картофель фри',kcal:312,p:3.4,f:15,c:41,vitam:{B1:.1,B2:.04,C:10,A:0},zn:.5,mg:25,fe:.6},
+sushi:{name:'Суши',kcal:150,p:6,f:2,c:28,vitam:{B1:.05,B2:.05,C:1,A:5},zn:.5,mg:12,fe:.5},
+pasta_bolognese:{name:'Паста болоньезе',kcal:160,p:8,f:5,c:21,vitam:{B1:.1,B2:.08,C:2,A:10},zn:1,mg:15,fe:1},
+salad_caesar:{name:'Салат Цезарь',kcal:190,p:10,f:14,c:6,vitam:{B1:.05,B2:.1,C:5,A:30},zn:.8,mg:15,fe:.8},
+salad_greek:{name:'Салат греческий',kcal:130,p:3,f:11,c:5,vitam:{B1:.03,B2:.05,C:10,A:50},zn:.5,mg:12,fe:.5},
+chocolate:{name:'Шоколад тёмный',kcal:546,p:5,f:31,c:61,vitam:{B1:.05,B2:.1,C:0,A:2},zn:2,mg:60,fe:3},
+chocolate_milk:{name:'Шоколад молочный',kcal:535,p:7,f:30,c:59,vitam:{B1:.05,B2:.15,C:0,A:20},zn:1.5,mg:40,fe:1.5},
+cookie:{name:'Печенье',kcal:417,p:5,f:15,c:65,vitam:{B1:.1,B2:.05,C:0,A:5},zn:.7,mg:15,fe:1},
+cake:{name:'Торт',kcal:350,p:5,f:18,c:44,vitam:{B1:.05,B2:.1,C:.5,A:30},zn:.5,mg:12,fe:.8},
+candy:{name:'Конфеты',kcal:400,p:2,f:10,c:78,vitam:{B1:.02,B2:.02,C:0,A:0},zn:.2,mg:5,fe:.3},
+honey:{name:'Мёд',kcal:304,p:.3,f:0,c:82,vitam:{B1:0,B2:.01,C:.5,A:0},zn:.2,mg:2,fe:.4},
+jam:{name:'Варенье',kcal:250,p:.3,f:.1,c:62,vitam:{B1:.01,B2:.01,C:2,A:0},zn:.1,mg:3,fe:.2},
+sugar:{name:'Сахар',kcal:399,p:0,f:0,c:99.7,vitam:{B1:0,B2:0,C:0,A:0},zn:0,mg:0,fe:0},
+coffee:{name:'Кофе чёрный',kcal:2,p:.1,f:0,c:0,vitam:{B1:0,B2:0,C:0,A:0},zn:0,mg:3,fe:0},
+tea:{name:'Чай чёрный',kcal:1,p:0,f:0,c:.2,vitam:{B1:0,B2:0,C:0,A:0},zn:0,mg:1,fe:0},
+juice_orange:{name:'Сок апельсиновый',kcal:45,p:.7,f:.2,c:10,vitam:{B1:.04,B2:.02,C:50,A:5},zn:.1,mg:10,fe:.2},
+juice_apple:{name:'Сок яблочный',kcal:46,p:.1,f:.1,c:11,vitam:{B1:.02,B2:.01,C:2,A:1},zn:.1,mg:5,fe:.2},
+cola:{name:'Кола',kcal:42,p:0,f:0,c:10.6,vitam:{B1:0,B2:0,C:0,A:0},zn:0,mg:1,fe:0},
+oil_veg:{name:'Масло растительное',kcal:899,p:0,f:99.9,c:0,vitam:{B1:0,B2:0,C:0,A:0},zn:0,mg:0,fe:0},
+oil_olive:{name:'Масло оливковое',kcal:884,p:0,f:99.8,c:0,vitam:{B1:0,B2:0,C:0,A:0},zn:0,mg:0,fe:0},
+mayo:{name:'Майонез',kcal:627,p:1,f:67,c:3,vitam:{B1:0,B2:0,C:0,A:10},zn:.1,mg:2,fe:.1},
+ketchup:{name:'Кетчуп',kcal:100,p:1.2,f:.1,c:22,vitam:{B1:.03,B2:.03,C:5,A:20},zn:.2,mg:10,fe:.4},
+soy_sauce:{name:'Соевый соус',kcal:58,p:6,f:0,c:8,vitam:{B1:.03,B2:.1,C:0,A:0},zn:.3,mg:30,fe:.5},
+cocoa:{name:'Какао-порошок',kcal:228,p:20,f:14,c:58,vitam:{B1:.1,B2:.2,C:0,A:0},zn:6.8,mg:500,fe:11.7}
+};
+
+let selectedItems=[],searchTimeout=null;
+const searchInput=document.getElementById('searchInput'),searchResults=document.getElementById('searchResults');
+searchInput.addEventListener('input',function(){
+clearTimeout(searchTimeout);
+const q=this.value.trim().toLowerCase();
+if(q.length<1){searchResults.classList.remove('show');return}
+searchTimeout=setTimeout(()=>{
+const matches=Object.entries(DB).filter(([k,v])=>v.name.toLowerCase().includes(q)).slice(0,12);
+if(matches.length===0){searchResults.classList.remove('show');return}
+searchResults.innerHTML=matches.map(([k,v])=>`<div class="search-item" onclick="addItem('${k}')">${v.name} <span class="kcal">${v.kcal} ккал/100г</span></div>`).join('');
+searchResults.classList.add('show');
+},200)
+});
+document.addEventListener('click',function(e){if(!e.target.closest('.search-box'))searchResults.classList.remove('show')});
+function addItem(key){
+if(selectedItems.find(i=>i.key===key)){searchInput.value='';searchResults.classList.remove('show');return}
+selectedItems.push({key:key,grams:100});searchInput.value='';searchResults.classList.remove('show');renderIngredients()
+}
+function renderIngredients(){
+const list=document.getElementById('ingredientsList');
+if(selectedItems.length===0){list.innerHTML='<p style="color:#aaa;font-size:.85rem;text-align:center;padding:15px;">Пока пусто.</p>';return}
+list.innerHTML=selectedItems.map((item,idx)=>{const food=DB[item.key];return `<div class="ingredient-item"><span><strong>${food.name}</strong></span><span><input type="number" value="${item.grams}" min="1" max="2000" style="width:70px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;text-align:center;" onchange="updateGrams(${idx},this.value)"> г <span class="remove" onclick="removeItem(${idx})">✕</span></span></div>`}).join('')
+}
+function updateGrams(idx,val){const g=parseFloat(val);if(!isNaN(g)&&g>0)selectedItems[idx].grams=g}
+function removeItem(idx){selectedItems.splice(idx,1);renderIngredients()}
+function clearAll(){selectedItems=[];renderIngredients();document.getElementById('result').classList.remove('show');document.getElementById('searchInput').value=''}
+function calculate(){
+if(selectedItems.length===0){alert('Добавь хотя бы один продукт');return}
+let total={kcal:0,p:0,f:0,c:0,B1:0,B2:0,C:0,A:0,zn:0,mg:0,fe:0};
+selectedItems.forEach(item=>{
+const food=DB[item.key],factor=item.grams/100;
+total.kcal+=food.kcal*factor;total.p+=food.p*factor;total.f+=food.f*factor;total.c+=food.c*factor;
+total.B1+=(food.vitam.B1||0)*factor;total.B2+=(food.vitam.B2||0)*factor;
+total.C+=(food.vitam.C||0)*factor;total.A+=(food.vitam.A||0)*factor;
+total.zn+=(food.zn||0)*factor;total.mg+=(food.mg||0)*factor;total.fe+=(food.fe||0)*factor
+});
+document.getElementById('macroGrid').innerHTML=`
+<div class="macro cal-highlight"><div class="val">${Math.round(total.kcal)}</div><div class="lbl">ккал</div></div>
+<div class="macro"><div class="val">${total.p.toFixed(1)}</div><div class="lbl">Белки, г</div></div>
+<div class="macro"><div class="val">${total.f.toFixed(1)}</div><div class="lbl">Жиры, г</div></div>
+<div class="macro"><div class="val">${total.c.toFixed(1)}</div><div class="lbl">Углеводы, г</div></div>`;
+document.getElementById('mineralGrid').innerHTML=`
+<div class="mineral"><div class="val">${total.zn.toFixed(1)}</div><div class="lbl">Цинк, мг</div></div>
+<div class="mineral"><div class="val">${Math.round(total.mg)}</div><div class="lbl">Магний, мг</div></div>
+<div class="mineral"><div class="val">${total.fe.toFixed(1)}</div><div class="lbl">Железо, мг</div></div>`;
+const vitTags=[];
+if(total.B1>0)vitTags.push(`B1: ${total.B1.toFixed(2)} мг`);
+if(total.B2>0)vitTags.push(`B2: ${total.B2.toFixed(2)} мг`);
+if(total.C>0)vitTags.push(`C: ${total.C.toFixed(1)} мг`);
+if(total.A>0)vitTags.push(`A: ${Math.round(total.A)} мкг`);
+document.getElementById('vitaminsBlock').innerHTML=vitTags.length>0?'<strong>Витамины:</strong><br>'+vitTags.map(t=>`<span class="tag">${t}</span>`).join(' '):'<span style="color:#aaa;">Витаминные данные отсутствуют</span>';
+const gender=document.getElementById('gender').value;
+const norms=gender==='male'?{B1:1.3,B2:1.2,C:75,A:900,zn:11,mg:410,fe:11}:{B1:1,B2:1,C:65,A:700,zn:9,mg:360,fe:15};
+const gaps=[];
+if(total.B1>0&&total.B1<norms.B1*.3)gaps.push('B1');
+if(total.B2>0&&total.B2<norms.B2*.3)gaps.push('B2');
+if(total.C>0&&total.C<norms.C*.3)gaps.push('витамина C');
+if(total.A>0&&total.A<norms.A*.3)gaps.push('витамина A');
+if(total.zn>0&&total.zn<norms.zn*.3)gaps.push('цинка');
+if(total.mg>0&&total.mg<norms.mg*.3)gaps.push('магния');
+if(total.fe>0&&total.fe<norms.fe*.3)gaps.push('железа');
+document.getElementById('recommendationBlock').innerHTML=gaps.length>0?`💡 <strong>Возможно, не хватает:</strong> ${gaps.join(', ')}. Добавь мясо/печень, орехи/семечки, овощи/фрукты.`:'✅ По базовым нутриентам выглядит неплохо.';
+document.getElementById('result').classList.add('show')
+}
+</script>
+</body>
+</html>
